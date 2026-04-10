@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users, notionResources, userAccess, InsertNotionResource, InsertUserAccess } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,105 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// ─── Notion Resources helpers ───
+
+export async function getAllUsers() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(users);
+}
+
+export async function updateUserRole(userId: number, role: "user" | "admin") {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ role }).where(eq(users.id, userId));
+}
+
+export async function getAllResources() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(notionResources);
+}
+
+export async function addResource(resource: InsertNotionResource) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(notionResources).values(resource).onDuplicateKeyUpdate({
+    set: { title: resource.title, description: resource.description, icon: resource.icon, type: resource.type },
+  });
+}
+
+export async function removeResource(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(userAccess).where(eq(userAccess.resourceId, id));
+  await db.delete(notionResources).where(eq(notionResources.id, id));
+}
+
+// ─── User Access helpers ───
+
+export async function getUserResources(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({
+      accessId: userAccess.id,
+      resourceId: notionResources.id,
+      notionId: notionResources.notionId,
+      type: notionResources.type,
+      title: notionResources.title,
+      description: notionResources.description,
+      icon: notionResources.icon,
+      grantedAt: userAccess.grantedAt,
+    })
+    .from(userAccess)
+    .innerJoin(notionResources, eq(userAccess.resourceId, notionResources.id))
+    .where(eq(userAccess.userId, userId));
+  return rows;
+}
+
+export async function grantAccess(userId: number, resourceId: number, grantedBy: number) {
+  const db = await getDb();
+  if (!db) return;
+  const existing = await db.select().from(userAccess)
+    .where(and(eq(userAccess.userId, userId), eq(userAccess.resourceId, resourceId)))
+    .limit(1);
+  if (existing.length > 0) return;
+  await db.insert(userAccess).values({ userId, resourceId, grantedBy });
+}
+
+export async function revokeAccess(userId: number, resourceId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(userAccess).where(
+    and(eq(userAccess.userId, userId), eq(userAccess.resourceId, resourceId))
+  );
+}
+
+export async function getAccessForResource(resourceId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      accessId: userAccess.id,
+      userId: users.id,
+      userName: users.name,
+      userEmail: users.email,
+      grantedAt: userAccess.grantedAt,
+    })
+    .from(userAccess)
+    .innerJoin(users, eq(userAccess.userId, users.id))
+    .where(eq(userAccess.resourceId, resourceId));
+}
+
+export async function checkUserAccess(userId: number, notionId: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .select({ id: userAccess.id })
+    .from(userAccess)
+    .innerJoin(notionResources, eq(userAccess.resourceId, notionResources.id))
+    .where(and(eq(userAccess.userId, userId), eq(notionResources.notionId, notionId)))
+    .limit(1);
+  return rows.length > 0;
+}

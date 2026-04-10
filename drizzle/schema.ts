@@ -2,16 +2,9 @@ import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-or
 
 /**
  * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
  */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -25,4 +18,35 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+/**
+ * Notion resources (databases or pages) exposed as services on the platform.
+ * Each resource maps to a real Notion database or page that can be assigned to users.
+ */
+export const notionResources = mysqlTable("notion_resources", {
+  id: int("id").autoincrement().primaryKey(),
+  notionId: varchar("notionId", { length: 64 }).notNull().unique(),
+  type: mysqlEnum("type", ["database", "page"]).notNull(),
+  title: varchar("title", { length: 512 }).notNull(),
+  description: text("description"),
+  icon: varchar("icon", { length: 128 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type NotionResource = typeof notionResources.$inferSelect;
+export type InsertNotionResource = typeof notionResources.$inferInsert;
+
+/**
+ * Access control: maps users to Notion resources they can access.
+ * This is the core of the SaaS model — each resource is a service that can be granted/revoked per user.
+ */
+export const userAccess = mysqlTable("user_access", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  resourceId: int("resourceId").notNull(),
+  grantedAt: timestamp("grantedAt").defaultNow().notNull(),
+  grantedBy: int("grantedBy"),
+});
+
+export type UserAccess = typeof userAccess.$inferSelect;
+export type InsertUserAccess = typeof userAccess.$inferInsert;

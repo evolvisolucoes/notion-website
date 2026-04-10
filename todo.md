@@ -1,0 +1,37 @@
+# Project TODO
+
+- [x] Configurar segredos NOTION_TOKEN e DATABASE_GESTAO_ID
+- [x] Schema de base de dados: tabela notion_resources (databases/pages do Notion como serviços)
+- [x] Schema de base de dados: tabela user_access (controlo de acesso utilizador → recurso)
+- [x] Rotas tRPC backend: notion.getDatabaseContent (proxy para Notion API)
+- [x] Rotas tRPC backend: notion.getPageContent (proxy para Notion API)
+- [x] Rotas tRPC backend: notion.getStatus (verificar status do utilizador no Notion)
+- [x] Rotas tRPC backend: notion.addRow (adicionar registo a database Notion)
+- [x] Rotas tRPC backend: notion.updateBlock (editar bloco inline)
+- [x] Rotas tRPC backend: notion.signup (registar utilizador com template Notion)
+- [x] Rotas tRPC backend: admin.listUsers (listar utilizadores)
+- [x] Rotas tRPC backend: admin.listResources (listar databases/pages do Notion)
+- [x] Rotas tRPC backend: admin.grantAccess (atribuir acesso a recurso)
+- [x] Rotas tRPC backend: admin.revokeAccess (revogar acesso a recurso)
+- [x] Rotas tRPC backend: admin.addResource (adicionar database/page como serviço)
+- [x] Rotas tRPC backend: admin.promoteUser (promover utilizador a admin)
+- [x] Identidade visual: paleta azul corporativa Evolvi, tipografia Inter, animações Framer Motion
+- [x] Tela de login com OAuth e identidade visual Evolvi (card com borda azul, logo)
+- [x] Dashboard principal com sidebar de navegação (recursos autorizados)
+- [x] Sidebar responsiva com hamburger mobile, logo Evolvi, links dinâmicos
+- [x] Painel de administração: gestão de utilizadores
+- [x] Painel de administração: gestão de recursos Notion (databases/pages)
+- [x] Painel de administração: atribuir/revogar acesso por utilizador
+- [x] Tela individual de database: listagem de registos com tabela dinâmica
+- [x] Tela individual de page: renderização de blocos estruturados
+- [x] Formulário dinâmico para adicionar registo a database (baseado nas propriedades reais)
+- [x] Edição inline de blocos (to_do checked, rich_text)
+- [x] Breadcrumb dinâmico com histórico de navegação entre databases e pages
+- [x] Tela de status do sistema (conectividade Notion)
+- [x] Fluxo de signup de utilizadores com associação Notion
+- [x] Layout responsivo e animado com Framer Motion
+- [x] Testes vitest para rotas backend
+- [x] Melhorar addRow para mapear dinamicamente tipos de propriedade Notion (title, rich_text, number, select, date, checkbox, email, url, status)
+- [x] Implementar breadcrumb com histórico real de navegação (stack de rotas)
+- [x] Melhorar status do sistema com verificações reais (DB, servidor)
+- [x] Testes vitest para rotas backend (notion, admin, resources)

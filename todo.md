@@ -35,3 +35,16 @@
 - [x] Implementar breadcrumb com histórico real de navegação (stack de rotas)
 - [x] Melhorar status do sistema com verificações reais (DB, servidor)
 - [x] Testes vitest para rotas backend (notion, admin, resources)
+
+## Alterações Solicitadas
+
+- [x] Substituir logo SVG pela logo oficial Evolvi (Logo_Evolvi_Principal.svg)
+- [x] Remover autenticação Manus OAuth
+- [x] Implementar login por email/senha com hash bcrypt (seguro)
+- [x] Adicionar tabela de credenciais de utilizador (email, password_hash)
+- [x] Criar página de login com formulário email/senha
+- [x] Criar rotas tRPC para login e logout com email/senha
+- [x] Adicionar painel admin de cadastro de utilizadores (admin.createUser com UI)
+- [x] Remover página de signup (self-signup desativado)
+- [x] Implementar JWT local com jose (SignJWT + jwtVerify)
+- [x] Testes vitest para login por email/senha (24 testes passando)

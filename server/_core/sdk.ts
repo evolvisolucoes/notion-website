@@ -257,47 +257,35 @@ class SDKServer {
   }
 
   async authenticateRequest(req: Request): Promise<User> {
-    // Regular authentication flow
+    // Local auth: verify JWT from cookie
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);
-    const session = await this.verifySession(sessionCookie);
 
-    if (!session) {
-      throw ForbiddenError("Invalid session cookie");
+    if (!sessionCookie) {
+      throw ForbiddenError("No session cookie");
     }
 
-    const sessionUserId = session.openId;
-    const signedInAt = new Date();
-    let user = await db.getUserByOpenId(sessionUserId);
+    try {
+      // Verify and decode JWT
+      const secret = new TextEncoder().encode(ENV.jwtSecret);
+      const verified = await jwtVerify(sessionCookie, secret);
+      const payload = verified.payload as any;
 
-    // If user not in DB, sync from OAuth server automatically
-    if (!user) {
-      try {
-        const userInfo = await this.getUserInfoWithJwt(sessionCookie ?? "");
-        await db.upsertUser({
-          openId: userInfo.openId,
-          name: userInfo.name || null,
-          email: userInfo.email ?? null,
-          loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
-          lastSignedIn: signedInAt,
-        });
-        user = await db.getUserByOpenId(userInfo.openId);
-      } catch (error) {
-        console.error("[Auth] Failed to sync user from OAuth:", error);
-        throw ForbiddenError("Failed to sync user info");
+      if (!payload.userId) {
+        throw ForbiddenError("Invalid JWT payload");
       }
+
+      // Get user from database
+      const user = await db.getUserById(payload.userId);
+      if (!user) {
+        throw ForbiddenError("User not found");
+      }
+
+      return user;
+    } catch (error) {
+      console.error("[Auth] JWT verification failed:", error);
+      throw ForbiddenError("Invalid session");
     }
-
-    if (!user) {
-      throw ForbiddenError("User not found");
-    }
-
-    await db.upsertUser({
-      openId: user.openId,
-      lastSignedIn: signedInAt,
-    });
-
-    return user;
   }
 }
 

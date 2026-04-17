@@ -1,16 +1,55 @@
-import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { SignJWT } from "jose";
+import { ENV } from "./_core/env";
+import bcrypt from "bcrypt";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
 import * as notion from "./notion";
+import { COOKIE_NAME } from "@shared/const";
+
 
 export const appRouter = router({
   system: systemRouter,
 
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
+    
+    login: publicProcedure
+      .input(z.object({
+        email: z.string().email(),
+        password: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const user = await db.getUserByEmail(input.email);
+        if (!user) {
+          throw new Error("Email ou senha inválidos");
+        }
+
+        // Hash the provided password and compare with bcrypt
+        const isPasswordValid = await bcrypt.compare(input.password, user.passwordHash);
+        if (!isPasswordValid) {
+          throw new Error("Email ou senha inválidos");
+        }
+
+        // Update last signed in
+        await db.updateLastSignedIn(user.id);
+
+        // Create JWT token with userId
+        const secret = new TextEncoder().encode(ENV.jwtSecret);
+        const token = await new SignJWT({ userId: user.id, email: user.email })
+          .setProtectedHeader({ alg: "HS256" })
+          .setExpirationTime("365d")
+          .sign(secret);
+
+        // Set session cookie
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: 365 * 24 * 60 * 60 * 1000 });
+
+        return { success: true, user };
+      }),
+
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
@@ -23,7 +62,8 @@ export const appRouter = router({
       .input(z.object({ databaseId: z.string() }))
       .query(async ({ ctx, input }) => {
         if (ctx.user.role !== "admin") {
-          const hasAccess = await db.checkUserAccess(ctx.user.id, input.databaseId);
+          const resources = await db.getUserResources(ctx.user.id);
+          const hasAccess = resources.some(r => r.notionId === input.databaseId);
           if (!hasAccess) throw new Error("Acesso não autorizado a esta database.");
         }
         return notion.getDatabaseContent(input.databaseId);
@@ -48,7 +88,8 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         if (ctx.user.role !== "admin") {
-          const hasAccess = await db.checkUserAccess(ctx.user.id, input.databaseId);
+          const resources = await db.getUserResources(ctx.user.id);
+          const hasAccess = resources.some(r => r.notionId === input.databaseId);
           if (!hasAccess) throw new Error("Acesso não autorizado a esta database.");
         }
         return notion.addRow(input.databaseId, input.properties as Record<string, string>);
@@ -64,20 +105,8 @@ export const appRouter = router({
         return notion.updateBlock(input.blockId, input.type, input.data);
       }),
 
-    signup: publicProcedure
-      .input(z.object({
-        nome: z.string(),
-        email: z.string().email(),
-        templateKey: z.string().optional(),
-        templateNome: z.string().optional(),
-      }))
-      .mutation(async ({ input }) => {
-        return notion.signup(input.nome, input.email, input.templateKey, input.templateNome);
-      }),
-
     health: protectedProcedure.query(async () => {
       const notionHealth = await notion.checkNotionHealth();
-      // Check DB connectivity
       let dbConnected = false;
       try {
         const dbInstance = await db.getDb();
@@ -97,12 +126,32 @@ export const appRouter = router({
       }
       return db.getUserResources(ctx.user.id);
     }),
+
+    getResourceById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return db.getResourceById(input.id);
+      }),
   }),
 
   admin: router({
     listUsers: adminProcedure.query(async () => {
       return db.getAllUsers();
     }),
+
+    createUser: adminProcedure
+      .input(z.object({
+        email: z.string().email(),
+        password: z.string().min(8),
+        name: z.string().optional(),
+        role: z.enum(["user", "admin"]).default("user"),
+      }))
+      .mutation(async ({ input }) => {
+        // Hash password with bcrypt
+        const passwordHash = await bcrypt.hash(input.password, 10);
+        await db.createUser(input.email, passwordHash, input.name, input.role);
+        return { success: true };
+      }),
 
     promoteUser: adminProcedure
       .input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) }))
@@ -124,7 +173,7 @@ export const appRouter = router({
         icon: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        await db.addResource({
+        await db.createResource({
           notionId: input.notionId,
           type: input.type,
           title: input.title,
@@ -137,7 +186,7 @@ export const appRouter = router({
     removeResource: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
-        await db.removeResource(input.id);
+        await db.deleteResource(input.id);
         return { success: true };
       }),
 
@@ -158,13 +207,13 @@ export const appRouter = router({
     getUserAccess: adminProcedure
       .input(z.object({ userId: z.number() }))
       .query(async ({ input }) => {
-        return db.getUserResources(input.userId);
+        return db.getUserAccessList(input.userId);
       }),
 
     getResourceAccess: adminProcedure
       .input(z.object({ resourceId: z.number() }))
       .query(async ({ input }) => {
-        return db.getAccessForResource(input.resourceId);
+        return db.getResourceAccessList(input.resourceId);
       }),
   }),
 });

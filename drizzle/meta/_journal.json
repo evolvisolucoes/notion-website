@@ -15,6 +15,13 @@
       "when": 1775782560434,
       "tag": "0001_good_la_nuit",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1776377265727,
+      "tag": "0002_mighty_the_order",
+      "breakpoints": true
     }
   ]
 }

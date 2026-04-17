@@ -1,16 +1,17 @@
-import { trpc } from "@/lib/trpc";
-import { Loader2, Shield, ShieldOff, Users, ChevronRight } from "lucide-react";
+import { Loader2, Shield, ShieldOff, Users, ChevronRight, Plus, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Breadcrumb from "@/components/Breadcrumb";
+import { trpc } from "@/lib/trpc";
 
 export default function AdminUsers() {
   const { data: users, isLoading, refetch } = trpc.admin.listUsers.useQuery();
   const { data: resources } = trpc.admin.listResources.useQuery();
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   const promoteMutation = trpc.admin.promoteUser.useMutation({
     onSuccess: () => {
@@ -32,9 +33,18 @@ export default function AdminUsers() {
           <h1 className="text-2xl font-bold text-gray-900">Utilizadores</h1>
           <p className="text-sm text-gray-500 mt-1">Gerir utilizadores e permissões de acesso</p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Users className="h-4 w-4" />
-          {users?.length || 0} utilizadores
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <Users className="h-4 w-4" />
+            {users?.length || 0} utilizadores
+          </div>
+          <Button
+            onClick={() => setShowCreateDialog(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Utilizador
+          </Button>
         </div>
       </div>
 
@@ -130,7 +140,132 @@ export default function AdminUsers() {
           onClose={() => setSelectedUser(null)}
         />
       )}
+
+      {showCreateDialog && (
+        <CreateUserDialog
+          onClose={() => setShowCreateDialog(false)}
+          onSuccess={() => {
+            setShowCreateDialog(false);
+            refetch();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function CreateUserDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+
+  const createMutation = trpc.admin.createUser.useMutation({
+    onSuccess: () => {
+      toast.success("Utilizador criado com sucesso!");
+      onSuccess();
+    },
+    onError: (err: any) => {
+      setError(err.message || "Erro ao criar utilizador");
+      toast.error(err.message || "Erro ao criar utilizador");
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (!email || !password) {
+      setError("Email e senha são obrigatórios");
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("Senha deve ter no mínimo 8 caracteres");
+      return;
+    }
+
+    createMutation.mutate({ email, password, name: name || undefined });
+  };
+
+  return (
+    <Dialog open={true} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Criar Novo Utilizador</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              placeholder="utilizador@example.com"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={createMutation.isPending}
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nome (opcional)</label>
+            <input
+              type="text"
+              placeholder="Nome do utilizador"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={createMutation.isPending}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+            <input
+              type="password"
+              placeholder="••••••••"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={createMutation.isPending}
+              required
+              minLength={8}
+            />
+            <p className="text-xs text-gray-500 mt-1">Mínimo 8 caracteres</p>
+          </div>
+          <div className="flex gap-2 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={createMutation.isPending}
+              className="flex-1"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              disabled={createMutation.isPending}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {createMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Criando...
+                </>
+              ) : (
+                "Criar"
+              )}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -148,50 +283,37 @@ function UserAccessDialog({ user, resources, onClose }: { user: any; resources: 
   const accessIds = new Set((userAccess || []).map((a: any) => a.resourceId));
 
   return (
-    <Dialog open onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+    <Dialog open={true} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Acessos de {user.name || user.email}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 mt-4">
-          {resources.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-4">
-              Nenhum recurso registado. Adicione recursos na secção de Recursos.
-            </p>
-          ) : (
-            resources.map((resource: any) => {
-              const hasAccess = accessIds.has(resource.id);
-              return (
-                <div key={resource.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:bg-gray-50">
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">{resource.title}</p>
-                    <p className="text-xs text-gray-400">{resource.type} · {resource.notionId.slice(0, 8)}...</p>
-                  </div>
-                  {hasAccess ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => revokeMutation.mutate({ userId: user.id, resourceId: resource.id })}
-                      disabled={revokeMutation.isPending}
-                      className="text-xs text-red-600 border-red-200 hover:bg-red-50"
-                    >
-                      Revogar
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => grantMutation.mutate({ userId: user.id, resourceId: resource.id })}
-                      disabled={grantMutation.isPending}
-                      className="text-xs text-green-600 border-green-200 hover:bg-green-50"
-                    >
-                      Conceder
-                    </Button>
-                  )}
+        <div className="space-y-3 max-h-96 overflow-y-auto">
+          {resources.map((resource: any) => {
+            const hasAccess = accessIds.has(resource.id);
+            return (
+              <div key={resource.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                <div>
+                  <p className="font-medium text-sm text-gray-900">{resource.title}</p>
+                  <p className="text-xs text-gray-500">{resource.type}</p>
                 </div>
-              );
-            })
-          )}
+                <Button
+                  size="sm"
+                  variant={hasAccess ? "default" : "outline"}
+                  onClick={() => {
+                    if (hasAccess) {
+                      revokeMutation.mutate({ userId: user.id, resourceId: resource.id });
+                    } else {
+                      grantMutation.mutate({ userId: user.id, resourceId: resource.id });
+                    }
+                  }}
+                  disabled={grantMutation.isPending || revokeMutation.isPending}
+                >
+                  {hasAccess ? "Remover" : "Conceder"}
+                </Button>
+              </div>
+            );
+          })}
         </div>
       </DialogContent>
     </Dialog>
